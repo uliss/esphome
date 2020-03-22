@@ -1,0 +1,115 @@
+substitutions:
+  device_name:           Cold water
+  device_id:             water_cold
+
+esphome:
+  name:                  ${device_id}
+  platform:              ESP8266
+  board:                 esp_wroom_02
+  comment:               "управление холодной водой и данные счетчиков расхода"
+
+wifi:
+  ssid:                  !secret wifi_ssid
+  password:              !secret wifi_password
+  fast_connect:          true
+
+api:
+  password:              !secret api_password
+
+ota:
+  password:              !secret ota_password
+  safe_mode:             true
+
+status_led:
+  pin:
+    number:              GPIO5
+    inverted:            false
+
+logger:                  # logging is off
+  baud_rate:             0
+
+web_server:
+  port:                  80
+  auth:
+    username:            admin
+    password:            !secret web_server_password
+
+time:                    # time from Home Assistant
+- platform:              homeassistant
+  id:                    homeassistant_time
+
+binary_sensor:
+  - platform:            gpio
+    pin:                 GPIO13
+    name:                "${device_name} button switch"
+    id:                  ${device_id}_button
+    on_release:
+      then:
+      - switch.toggle:   ${device_id}_switch
+
+switch:
+  - platform:            gpio
+    pin:                 GPIO12
+    id:                  ${device_id}_switch
+    name:                "${device_name} switch"
+    icon:                "mdi:water-outline"
+    restore_mode:        RESTORE_DEFAULT_OFF
+    on_turn_on:
+      then:
+      - output.turn_on:  ${device_id}_switch_led
+    on_turn_off:
+      then:
+      - output.turn_off: ${device_id}_switch_led
+
+output:
+  - platform:            gpio
+    pin:
+      number:            GPIO4
+      inverted:          false
+    id:                  ${device_id}_switch_led
+
+sensor:
+  - platform:            wifi_signal
+    name:                ${device_name} wifi signal
+    update_interval:     60s
+  - platform:            uptime
+    name:                ${device_name} uptime
+    update_interval:     60s
+
+  - platform:            pulse_counter
+    name:                "cold water counter"
+    id:                  cold_water_counter
+    unit_of_measurement: "L"
+    pin:
+      number:            GPIO14
+      mode:              INPUT_PULLUP
+      inverted:          true
+
+    update_interval:     60s
+    internal_filter:     100ms
+    filters:
+      # Коэффициент 0.25 из-за обновления 1 раза в сек,
+      # у счетчика 1 тик на 10 литров воды
+      - lambda:          |-
+          static double total_cold_water_value = 0;
+          total_cold_water_value  = (x * 10) * 0.25;
+          return total_cold_water_value;
+
+  - platform:            pulse_counter
+    name:                "hot water counter"
+    id:                  hot_water_counter
+    unit_of_measurement: "L"
+    pin:
+      number:            GPIO15
+      mode:              INPUT_PULLUP
+      inverted:          true
+
+    update_interval:     60s
+    internal_filter:     100ms
+    filters:
+      # Коэффициент 0.25 из-за обновления 1 раза в сек,
+      # у счетчика 1 тик на 10 литров воды
+      - lambda:          |-
+          static double total_hot_water_value = 0;
+          total_hot_water_value  = (x * 10) * 0.25;
+          return total_hot_water_value;
